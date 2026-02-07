@@ -34,13 +34,7 @@
             }
         }
     },
-    "postCreateCommand": [
-        "git config --global --add safe.directory /home/student/projects",
-        "git config --global user.name \"Student\"",
-        "git config --global user.email \"student@users.noreply.github.com\"",
-        "git config --global core.autocrlf false",
-        "echo 'Sandbox ready'"
-    ],
+    "postCreateCommand": "git config --global --add safe.directory /home/student/projects && git config --global core.autocrlf false && echo 'Sandbox ready'",
     "features": {},
     "shutdownAction": "stopContainer"
 }
