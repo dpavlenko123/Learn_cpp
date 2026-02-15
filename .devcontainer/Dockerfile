@@ -44,6 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     llvm-${LLVM_VERSION} \
     llvm-${LLVM_VERSION}-dev \
     libc++-${LLVM_VERSION}-dev \
+    libclang-rt-${LLVM_VERSION}-dev \
     libc++abi-${LLVM_VERSION}-dev \
     libunwind-${LLVM_VERSION}-dev \
     libomp-${LLVM_VERSION}-dev \
