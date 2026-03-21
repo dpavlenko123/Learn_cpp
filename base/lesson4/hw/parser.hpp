@@ -1,5 +1,7 @@
 #include "types.hpp"
-
+#include "exceptions.hpp"
+class ASTNode;
+using node_ptr = std::unique_ptr<ASTNode>;
 class ASTNode {
     Type type;
 public:
@@ -29,55 +31,53 @@ public:
 };
 
 class BinaryNode : public ASTNode {
-    std::unique_ptr<ASTNode> left, right;
+    node_ptr left, right;
 public:
-    BinaryNode(Type t, std::unique_ptr<ASTNode> l, std::unique_ptr<ASTNode> r) : ASTNode(t), 
+    BinaryNode(Type t, node_ptr l, node_ptr r) : ASTNode(t), 
     left(std::move(l)), right(std::move(r)) {}
-    const std::unique_ptr<ASTNode>& getLeft() const {
+    const node_ptr& getLeft() const {
         return left;
     }
-    const std::unique_ptr<ASTNode>& getRight() const {
+    const node_ptr& getRight() const {
         return right;
     }
 };
 
 class InOutStmt : public ASTNode {
-    std::unique_ptr<ASTNode> expr;
+    node_ptr expr;
 public:
-    InOutStmt(Type t, std::unique_ptr<ASTNode> e) : ASTNode(t), expr(std::move(e)) {}
-    const std::unique_ptr<ASTNode>& getExpr() const {
+    InOutStmt(Type t, node_ptr e) : ASTNode(t), expr(std::move(e)) {}
+    const node_ptr& getExpr() const {
         return expr;
     }
 };
 
 class ConditionStmt : public ASTNode {
-    std::unique_ptr<ASTNode> condition;
-    std::vector<std::unique_ptr<ASTNode>> body;
+    node_ptr condition;
+    std::vector<node_ptr> body;
 public:
-    ConditionStmt(Type t, std::unique_ptr<ASTNode> c, std::vector<std::unique_ptr<ASTNode>> b) : ASTNode(t), 
+    ConditionStmt(Type t, node_ptr c, std::vector<node_ptr> b) : ASTNode(t), 
     condition(std::move(c)), body(std::move(b)) {}
-    const std::vector<std::unique_ptr<ASTNode>>& getBody() const {
+    const std::vector<node_ptr>& getBody() const {
         return body;
     }
-    const std::unique_ptr<ASTNode>& getCondition() const {
+    const node_ptr& getCondition() const {
         return condition;
     }
 };
 
 class Block : public ASTNode {
-    std::vector<std::unique_ptr<ASTNode>> body;
+    std::vector<node_ptr> body;
 public:
-    Block(std::vector<std::unique_ptr<ASTNode>> b) : ASTNode(Type::BLOCK),  body(std::move(b)) {}
-    const std::vector<std::unique_ptr<ASTNode>>& getBody() const {
+    Block(std::vector<node_ptr> b) : ASTNode(Type::BLOCK),  body(std::move(b)) {}
+    const std::vector<node_ptr>& getBody() const {
         return body;
     }
 };
 
-using node_ptr = std::unique_ptr<ASTNode>;
-
 class Parser {
-    std::vector<std::unique_ptr<Token>>::const_iterator current;
-    std::vector<std::unique_ptr<Token>>::const_iterator end;
+    TokenVectorConstIterator current;
+    TokenVectorConstIterator end;
 
     Type look() const {
     if (current == end) {
@@ -87,9 +87,13 @@ class Parser {
 }
 
     std::string lookUp() const {
-        static std::string empty = "";
+        std::string empty = "";
         if (current == end) return empty;
         return (*current)->getValue();
+    }
+
+    std::string getLine() const {
+        return std::to_string((*current)->getLine());
     }
 
     void next() {
@@ -104,7 +108,7 @@ class Parser {
         else return false;
     }
 public:
-    node_ptr parse(typename std::vector<std::unique_ptr<Token>>::const_iterator beg, typename std::vector<std::unique_ptr<Token>>::const_iterator e) {
+    node_ptr parse(TokenVectorConstIterator beg, TokenVectorConstIterator e) {
         current = beg;
         end = e;
         return program();
@@ -124,13 +128,14 @@ private:
                 stmtList.push_back(std::move(node));
             }
         }
+        if (stmtList.empty()) throw СompilerError("Empty program");
         return stmtList;
     }
 
     std::vector<node_ptr> block() {
-        match(Type::LBRACKET);
+        if (!match(Type::LBRACKET)) throw СompilerError("Expected '{' on line " + getLine());
         auto node = statementList();
-        match(Type::RBRACKET);
+        if (!match(Type::RBRACKET)) throw СompilerError("Expected '}' on line " + getLine());
         return node;
     }
 
@@ -138,18 +143,18 @@ private:
         auto op = look();
         if (op==Type::WHILE || op==Type::IF) {
             next();
-            match(Type::LPAREN);
+            if (!match(Type::LPAREN)) throw СompilerError("Expected '(' on line " + getLine());
             auto cond = simpleExpr();
-            match(Type::RPAREN);
+            if (!match(Type::RPAREN)) throw СompilerError("Expected ')' on line " + getLine());
             auto body = block();
             return std::make_unique<ConditionStmt>(op, std::move(cond), std::move(body));
         }
         if (op==Type::PRINT || op==Type::IN) {
             next();
-            match(Type::LPAREN);
+            if (!match(Type::LPAREN)) throw СompilerError("Expected '(' on line " + getLine());
             auto expr = simpleExpr();
-            match(Type::RPAREN);
-            match(Type::SEMI);
+            if (!match(Type::RPAREN)) throw СompilerError("Expected ')' on line " + getLine());
+            if (!match(Type::SEMI)) throw СompilerError("Expected ';' on line " + getLine());
             return std::make_unique<InOutStmt>(op, std::move(expr));
         }
         return assignment();
@@ -160,7 +165,7 @@ private:
         if (left->getType()==Type::IDENTIFIER && look()==Type::ASSIGN) {
             next();
             auto right = simpleExpr();
-            match(Type::SEMI);
+            if (!match(Type::SEMI)) throw СompilerError("Expected ';' on line " + getLine());
             return std::make_unique<BinaryNode>(Type::ASSIGN, std::move(left), std::move(right));
         }
         return left;
@@ -216,7 +221,7 @@ private:
         if (look()==Type::LPAREN) {
             next();
             node = expression();
-            match(Type::RPAREN);
+            if (!match(Type::RPAREN)) throw СompilerError("Expected ')' on line " + getLine());
         }
         return node;
     }

@@ -7,40 +7,40 @@
 #include <cctype>
 #include <fstream>
 #include "types.hpp"
-
-using FactoryMethod = std::function<std::unique_ptr<Token>()>;
+#include "exceptions.hpp"
 
 class Lexer {
 private: 
-    std::vector<std::unique_ptr<Token>> tokens;
+    TokenVector tokens;
     std::string::const_iterator current;
     std::string::const_iterator eof;
+    size_t line = 1;
 
     std::unordered_map<std::string, FactoryMethod> factory = {
-        {"while", []() { return std::make_unique<TokenNoVal>(Type::WHILE); } },
-        {"if", []() { return std::make_unique<TokenNoVal>(Type::IF); } },
-        {"in", []() { return std::make_unique<TokenNoVal>(Type::IN); } },
-        {"print", []() { return std::make_unique<TokenNoVal>(Type::PRINT); } },
-        {"=", []() { return std::make_unique<TokenNoVal>(Type::ASSIGN); } },
-        {"+", []() { return std::make_unique<TokenNoVal>(Type::PLUS); } },
-        {"-", []() { return std::make_unique<TokenNoVal>(Type::MINUS); } },
-        {"/", []() { return std::make_unique<TokenNoVal>(Type::DIVIDE); } },
-        {"*", []() { return std::make_unique<TokenNoVal>(Type::MULTIPLY); } },
-        {"<", []() { return std::make_unique<TokenNoVal>(Type::LESS); } },
-        {">", []() { return std::make_unique<TokenNoVal>(Type::MORE); } },
-        {"<=", []() { return std::make_unique<TokenNoVal>(Type::LESSEQ); } },
-        {">=", []() { return std::make_unique<TokenNoVal>(Type::MOREEQ); } },
-        {"==", []() { return std::make_unique<TokenNoVal>(Type::EQ); } },
-        {"!=", []() { return std::make_unique<TokenNoVal>(Type::NEQ); } },
-        {"(", []() { return std::make_unique<TokenNoVal>(Type::LPAREN); } },
-        {")", []() { return std::make_unique<TokenNoVal>(Type::RPAREN); } },
-        {"{", []() { return std::make_unique<TokenNoVal>(Type::LBRACKET); } },
-        {"}", []() { return std::make_unique<TokenNoVal>(Type::RBRACKET); } },
-        {";", []() { return std::make_unique<TokenNoVal>(Type::SEMI); } } 
+        {"while", [this]() { return std::make_unique<TokenNoVal>(Type::WHILE, line); } },
+        {"if", [this]() { return std::make_unique<TokenNoVal>(Type::IF, line); } },
+        {"in", [this]() { return std::make_unique<TokenNoVal>(Type::IN, line); } },
+        {"print", [this]() { return std::make_unique<TokenNoVal>(Type::PRINT, line); } },
+        {"=", [this]() { return std::make_unique<TokenNoVal>(Type::ASSIGN, line); } },
+        {"+", [this]() { return std::make_unique<TokenNoVal>(Type::PLUS, line); } },
+        {"-", [this]() { return std::make_unique<TokenNoVal>(Type::MINUS, line); } },
+        {"/", [this]() { return std::make_unique<TokenNoVal>(Type::DIVIDE, line); } },
+        {"*", [this]() { return std::make_unique<TokenNoVal>(Type::MULTIPLY, line); } },
+        {"<", [this]() { return std::make_unique<TokenNoVal>(Type::LESS, line); } },
+        {">", [this]() { return std::make_unique<TokenNoVal>(Type::MORE, line); } },
+        {"<=", [this]() { return std::make_unique<TokenNoVal>(Type::LESSEQ, line); } },
+        {">=", [this]() { return std::make_unique<TokenNoVal>(Type::MOREEQ, line); } },
+        {"==", [this]() { return std::make_unique<TokenNoVal>(Type::EQ, line); } },
+        {"!=", [this]() { return std::make_unique<TokenNoVal>(Type::NEQ, line); } },
+        {"(", [this]() { return std::make_unique<TokenNoVal>(Type::LPAREN, line); } },
+        {")", [this]() { return std::make_unique<TokenNoVal>(Type::RPAREN, line); } },
+        {"{", [this]() { return std::make_unique<TokenNoVal>(Type::LBRACKET, line); } },
+        {"}", [this]() { return std::make_unique<TokenNoVal>(Type::RBRACKET, line); } },
+        {";", [this]() { return std::make_unique<TokenNoVal>(Type::SEMI, line); } } 
     };
 
 public:
-    Lexer(std::string::const_iterator cur, std::string::const_iterator e) : current(cur), eof(e) {} 
+    Lexer(const std::string& str) : current(str.cbegin()), eof(str.cend()) {} 
 
     void tokenize() {
         while (current!=eof) {
@@ -53,22 +53,27 @@ public:
             else if (symbols.contains(*current)) {
                 handleSymbol();
             }
-            else ++current;
+            else if (*current=='\n') { 
+                ++line;
+                ++current;
+            }
+            else if (*current==' ' || *current == '\t') ++current;
+            else throw СompilerError("Unexpected character: '" + std::string(1, *current) +"' on line " + std::to_string(line));
         }
-        tokens.push_back(std::make_unique<TokenNoVal>(Type::EOFTOKEN));
+        tokens.push_back(std::make_unique<TokenNoVal>(Type::EOFTOKEN, line));
     }
 
 
-    std::vector<std::unique_ptr<Token>>::const_iterator begin() const {
+    TokenVectorConstIterator begin() const {
         return tokens.cbegin();
     }
 
-    std::vector<std::unique_ptr<Token>>::const_iterator end() const {
+    TokenVectorConstIterator end() const {
         return tokens.cend();
     }
 
-    std::vector<std::unique_ptr<Token>>& getTokens() { return tokens; }
-    const std::vector<std::unique_ptr<Token>>& getTokens() const { return tokens; }
+    TokenVector& getTokens() { return tokens; }
+    const TokenVector& getTokens() const { return tokens; }
 
 private:
     void handleStr() {
@@ -79,7 +84,7 @@ private:
         }
         auto it = factory.find(res);
         if (it != factory.end()) tokens.push_back(it->second()); 
-        else tokens.push_back(std::make_unique<TokenVal>(Type::IDENTIFIER, res));
+        else tokens.push_back(std::make_unique<TokenVal>(Type::IDENTIFIER, line, res));
     }
 
     void handleNum() {
@@ -88,7 +93,7 @@ private:
             res += *current;
             ++current;
         }
-        tokens.push_back(std::make_unique<TokenVal>(Type::NUMBER, res));
+        tokens.push_back(std::make_unique<TokenVal>(Type::NUMBER, line, res));
     }
 
     void handleSymbol() {
@@ -105,6 +110,7 @@ private:
         }
         auto it = factory.find(res);
         if (it != factory.end()) tokens.push_back(it->second()); 
+        else throw СompilerError("Unexpected operator: '" + res + "' on line " + std::to_string(line));
     }
 
     const std::unordered_set<char> symbols = {'+', '-', '*', '/', '>', '<', 
