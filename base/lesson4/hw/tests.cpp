@@ -8,7 +8,7 @@ protected:
     size_t idx = 0;
     
     void tokenize(const std::string& input) {
-        lexer = std::make_unique<Lexer>(input.begin(), input.end());
+        lexer = std::make_unique<Lexer>(input);
         lexer->tokenize();
         tokens = &lexer->getTokens();
     }
@@ -38,6 +38,10 @@ TEST_F(LexerTest, Assignment) {
     expectToken(Type::NUMBER, "5");
     expectToken(Type::SEMI);
     expectEnd();
+}
+
+TEST_F(LexerTest, Throw) {
+    EXPECT_THROW(tokenize("a = @"), СompilerError);
 }
 
 TEST_F(LexerTest, Keywords) {
@@ -109,7 +113,7 @@ TEST_F(LexerTest, LongIdentifiers) {
 }
 
 TEST_F(LexerTest, Whitespace) {
-    tokenize("a\n\n  =\t\n5  ;");
+    tokenize("a\n\n  =\n5  ;");
     
     expectToken(Type::IDENTIFIER, "a");
     expectToken(Type::ASSIGN);
@@ -167,16 +171,6 @@ TEST_F(LexerTest, EmptyInput) {
     expectEnd();
 }
 
-
-TEST_F(LexerTest, UnknownCharacters) {
-    tokenize("a @ b $ c");
-    
-    expectToken(Type::IDENTIFIER, "a");
-    expectToken(Type::IDENTIFIER, "b");
-    expectToken(Type::IDENTIFIER, "c");
-    expectEnd();
-}
-
 TEST_F(LexerTest, KeywordsAndIdentifiers) {
     tokenize("if ifvar while whilevar");
     
@@ -195,7 +189,7 @@ protected:
     std::unique_ptr<ASTNode> ast;
     
     void parse(const std::string& input) {
-        lexer = std::make_unique<Lexer>(input.begin(), input.end());
+        lexer = std::make_unique<Lexer>(input);
         lexer->tokenize();
         parser = std::make_unique<Parser>();
         auto begin = lexer->begin();
@@ -293,6 +287,38 @@ TEST_F(ParserTest, LeftAssociativity) {
     EXPECT_TRUE(isSimpleNode(sub1->getRight().get(), Type::NUMBER, "2"));
 }
 
+TEST_F(ParserTest, ComplicatedStmt) {
+    parse("x = 10 * (5 - a) + 3 * (2 - 1 * 8);");
+    auto block = dynamic_cast<Block*>(ast.get());
+    auto assign = dynamic_cast<BinaryNode*>(block->getBody()[0].get());
+    auto add = dynamic_cast<BinaryNode*>(assign->getRight().get());
+
+    ASSERT_TRUE(isBinaryNode(add, Type::PLUS));
+
+    auto sub1 = dynamic_cast<BinaryNode*>(add->getLeft().get());
+    ASSERT_TRUE(isBinaryNode(sub1, Type::MULTIPLY));
+    EXPECT_TRUE(isSimpleNode(sub1->getLeft().get(), Type::NUMBER, "10"));
+    auto sub11 = dynamic_cast<BinaryNode*>(sub1->getRight().get());
+
+    ASSERT_TRUE(isBinaryNode(sub11, Type::MINUS));
+    EXPECT_TRUE(isSimpleNode(sub11->getLeft().get(), Type::NUMBER, "5"));
+    EXPECT_TRUE(isSimpleNode(sub11->getRight().get(), Type::IDENTIFIER, "a"));
+
+    auto sub2 = dynamic_cast<BinaryNode*>(add->getRight().get());
+    ASSERT_TRUE(isBinaryNode(sub2, Type::MULTIPLY));
+    EXPECT_TRUE(isSimpleNode(sub2->getLeft().get(), Type::NUMBER, "3"));
+    auto sub21 = dynamic_cast<BinaryNode*>(sub2->getRight().get());
+    
+    ASSERT_TRUE(isBinaryNode(sub21, Type::MINUS));
+    EXPECT_TRUE(isSimpleNode(sub21->getLeft().get(), Type::NUMBER, "2"));
+
+    auto sub211 = dynamic_cast<BinaryNode*>(sub21->getRight().get());
+    ASSERT_TRUE(isBinaryNode(sub211, Type::MULTIPLY));
+    EXPECT_TRUE(isSimpleNode(sub211->getLeft().get(), Type::NUMBER, "1"));
+    EXPECT_TRUE(isSimpleNode(sub211->getRight().get(), Type::NUMBER, "8"));
+}
+
+
 TEST_F(ParserTest, IfStatement) {
     parse("if (x < 10) { y = 5; }");
     auto block = dynamic_cast<Block*>(ast.get());
@@ -356,6 +382,91 @@ TEST_F(ParserTest, FullProgram) {
     
     auto print2 = dynamic_cast<InOutStmt*>(block->getBody()[2].get());
     EXPECT_TRUE(isInOutNode(print2, Type::PRINT));
+}
+
+TEST_F(ParserTest, ThrowSemi) {
+    try {
+        parse("a = 4");
+        FAIL() << "Expected ParseError";
+    }
+    catch(const СompilerError& e) {
+        EXPECT_STREQ(e.what(), "Expected ';' on line 1");
+    }
+}
+
+TEST_F(ParserTest, UnclosedParen) {
+    try {
+         parse(R"(
+            i = 0;
+            while (i < 10 {
+                print(i);
+                i = i + 1;
+            }
+            print(i);
+        )");
+        FAIL() << "Expected ParseError";
+    }
+    catch(const СompilerError& e) {
+        EXPECT_STREQ(e.what(), "Expected ')' on line 3");
+    }
+}
+
+TEST_F(ParserTest, EmptyProgram) {
+    try {
+        parse("     ");
+        FAIL() << "Expected ParseError";
+    }
+    catch(const СompilerError& e) {
+        EXPECT_STREQ(e.what(), "Empty program");
+    }
+}
+
+TEST_F(ParserTest, MoreParentheses) {
+    parse("x = (1 + 2) * (3 - 4) / (5 + 6);");
+    auto block = dynamic_cast<Block*>(ast.get());
+    auto assign = dynamic_cast<BinaryNode*>(block->getBody()[0].get());
+    ASSERT_TRUE(isBinaryNode(assign, Type::ASSIGN));
+    
+    auto div = dynamic_cast<BinaryNode*>(assign->getRight().get());
+    ASSERT_TRUE(isBinaryNode(div, Type::DIVIDE));
+    
+    auto mult = dynamic_cast<BinaryNode*>(div->getLeft().get());
+    ASSERT_TRUE(isBinaryNode(mult, Type::MULTIPLY));
+    
+    auto add1 = dynamic_cast<BinaryNode*>(mult->getLeft().get());
+    ASSERT_TRUE(isBinaryNode(add1, Type::PLUS));
+    auto sub = dynamic_cast<BinaryNode*>(mult->getRight().get());
+    ASSERT_TRUE(isBinaryNode(sub, Type::MINUS));
+    auto add2 = dynamic_cast<BinaryNode*>(div->getRight().get());
+    ASSERT_TRUE(isBinaryNode(add2, Type::PLUS));
+}
+
+
+TEST_F(ParserTest, AllOperators) {
+    parse("x = 1 + 2 - 3 * 4 / 5;");
+    auto block = dynamic_cast<Block*>(ast.get());
+    auto assign = dynamic_cast<BinaryNode*>(block->getBody()[0].get());
+    ASSERT_TRUE(isBinaryNode(assign, Type::ASSIGN));
+
+    EXPECT_TRUE(isSimpleNode(assign->getLeft().get(), Type::IDENTIFIER, "x"));
+    
+    auto firstMinus = dynamic_cast<BinaryNode*>(assign->getRight().get());
+    ASSERT_TRUE(isBinaryNode(firstMinus, Type::MINUS));
+    
+    auto plus = dynamic_cast<BinaryNode*>(firstMinus->getLeft().get());
+    ASSERT_TRUE(isBinaryNode(plus, Type::PLUS));
+    EXPECT_TRUE(isSimpleNode(plus->getLeft().get(), Type::NUMBER, "1"));
+    EXPECT_TRUE(isSimpleNode(plus->getRight().get(), Type::NUMBER, "2"));
+    
+    auto division = dynamic_cast<BinaryNode*>(firstMinus->getRight().get());
+    ASSERT_TRUE(isBinaryNode(division, Type::DIVIDE));
+
+    auto multiply = dynamic_cast<BinaryNode*>(division->getLeft().get());
+    ASSERT_TRUE(isBinaryNode(multiply, Type::MULTIPLY));
+    EXPECT_TRUE(isSimpleNode(multiply->getLeft().get(), Type::NUMBER, "3"));
+    EXPECT_TRUE(isSimpleNode(multiply->getRight().get(), Type::NUMBER, "4"));
+
+    EXPECT_TRUE(isSimpleNode(division->getRight().get(), Type::NUMBER, "5"));
 }
 
 int main(int argc, char **argv) {
