@@ -1,151 +1,114 @@
-#include <memory>
-#include <variant>
-
-class NumberNode;
-class AddNode;
-class MulNode;
-
-class Visitor {
+class ASTNode {
 public:
-    virtual void visit(const NumberNode&) = 0;
-    virtual void visit(const AddNode&) = 0;
-    virtual void visit(const MulNode&) = 0;
-
-    virtual ~Visitor() = default;
+    virtual int traverse() const = 0;
 };
 
-class Node {
+
+class BinaryNode : public ASTNode {
+    node_ptr left, right;
 public:
-    virtual void accept(Visitor& v) const = 0;
-    virtual ~Node() = default;
-};
+    BinaryNode(Type t, node_ptr l, node_ptr r)
+        : ASTNode(t), left(std::move(l)), right(std::move(r)) {}
 
-using NodePtr = std::unique_ptr<Node>;
+    ASTNode* getLeft() const { return left.get(); }
+    ASTNode* getRight() const { return right.get(); }
 
-class NumberNode : public Node {
-public:
-    explicit NumberNode(int v) : value(v) {}
-
-    void accept(Visitor& v) const override {
-        v.visit(*this);
+    int traverse() const override {
+        int left = left->traverse();
+        int right = right->traverse();
+        return left + right;
     }
-
-    int value;
 };
 
-class AddNode : public Node {
-public:
-    AddNode(NodePtr l, NodePtr r)
-        : left(std::move(l)), right(std::move(r)) {}
 
-    void accept(Visitor& v) const override {
-        v.visit(*this);
+
+
+class ASTNode; 
+
+class ASTVisitor {
+public:
+    virtual ~ASTVisitor() = default;
+
+    virtual void visit(class NumberNode* node) = 0;
+    virtual void visit(class IdentNode* node) = 0;
+    virtual void visit(class BinaryNode* node) = 0;
+};
+
+class PrintVisitor: ASTVisitor [
+    void visit(class NumberNode* node);
+]
+
+
+class ASTNode {
+public:
+    virtual ~ASTNode() = default;
+    virtual void accept(ASTVisitor* visitor) = 0;
+
+    void accept() {
+        *this->accept();
     }
-
-    NodePtr left;
-    NodePtr right;
 };
 
-class MulNode : public Node {
-public:
-    MulNode(NodePtr l, NodePtr r)
-        : left(std::move(l)), right(std::move(r)) {}
 
-    void accept(Visitor& v) const override {
-        v.visit(*this);
+class SimpleNode : public ASTNode {
+    std::string value;
+public:
+    SimpleNode(Type t, std::string val) : ASTNode(t), value(val) {}
+    const std::string& getValue() const { return value; }
+
+    void accept(ASTVisitor* visitor) override {
+        visitor->visit(this);
     }
-
-    NodePtr left;
-    NodePtr right;
 };
-///////////////////////////////
 
-
-
-
-struct DumpVisitor;
-struct EvalVisitor;
-
-struct Node;
-
-using AstNodePtr = std::unique_ptr<Node>;
-
-class BinNode {
-    friend DumpVisitor;
-    friend EvalVisitor;
+class BinaryNode : public ASTNode {
+    node_ptr left, right;
 public:
-    BinNode(AstNodePtr left, AstNodePtr right):
-        left_(std::move(left)), right_(std::move(right)) {}
-protected:
-    AstNodePtr left_;
-    AstNodePtr right_;
-};
+    BinaryNode(Type t, node_ptr l, node_ptr r)
+        : ASTNode(t), left(std::move(l)), right(std::move(r)) {}
 
-class AssignNode: public BinNode {
-    friend DumpVisitor;
-    friend EvalVisitor;
-public:
-    AssignNode(AstNodePtr left, AstNodePtr right): 
-        BinNode(std::move(left), std::move(right)) {}
-};
+    ASTNode* getLeft() const { return left.get(); }
+    ASTNode* getRight() const { return right.get(); }
 
-class IfNode: public BinNode {
-    friend DumpVisitor;
-    friend EvalVisitor;
-public:
-    IfNode(AstNodePtr left, AstNodePtr right): 
-        BinNode(std::move(left), std::move(right)) {}
-};
-
-using VariantNode = std::variant<AssignNode,IfNode>;
-
-struct Node: public VariantNode {};
-
-struct EvalVisitor {
-    int operator()(const AssignNode& node) {
-        EvalVisitor visitor;
-        int value = std::visit(visitor, *node.right_);
-
-        auto ident_node = std::get<IdentNode>(*node.left_);
-        ident_node.setValue(value);
-
-        return 0;
+    void accept(ASTVisitor* visitor) override {
+        visitor->visit(this);
     }
+};
 
-    int operator()(const IfNode& node) {
-        EvalVisitor visitor;
-        if (std::visit(visitor, *node.left_)) {
-            return std::visit(visitor, *node.right_);
-        }
-        return 0;
-    }
-    int operator()(const NumberNode& node) {
-        return node.value;
+int EvalVisitor::visit(const BinaryNode* node) const
+{
+    int left_value = node->left_->accept(this);
+    int right_value = node->right_->accept(this);
+
+    return node.operations_.at(node.op_)(left_value, right_value);
+}
+
+int EvalVisitor::visit(const NumberNode& node) const
+{
+    return node.value_;
+}
+
+int EvalVisitor::visit(const Block& node) const
+{
+    for(auto node : node.vector) {
+        node->accept();
     }
 }
 
-template<typename Derived>
-class Base {
-    void print() {
-        asDerived().output();
-    };
+using VariantNode = std::variant<BinaryNode, NumberNode>;
 
-    const Derived& asDerived() {
-        return static_cast<const Derived&>(*this);
+struct Node: public VariantNode {};
+
+using node_ptr = std::unique_ptr<Node>;
+
+struct Vistor {
+    void operator()(const BinaryNode* node) {
+        Visitor visitor;
+        int ret = std::visit(visitor, node->left);
+        int ret = std::visit(visitor, node->right);
     }
-};
-
-
-class Derived: public Base<Derived> {
-    void output() {
-        std::cout << "Derived" << std::endl;
+    void operator()(const NumberNode* node) {
+        return node.value();
     }
-};
-
-class Derived1: public Base<Derived1> {
-    void output() {
-        std::cout << "Derived1" << std::endl;
-    }
-};
-
+}
 
