@@ -11,13 +11,13 @@ enum class Type {
     EOFTOKEN
 };
 
+
 class Token {
 protected:
     Type type;
     size_t line;
 public:
     Token(Type t, size_t l) : type(t), line(l) {}
-    virtual std::string typeToString() const = 0;
     virtual bool hasValue() const { return false; }
     Type getType() const { return type; }
     size_t getLine() const { return line; }
@@ -33,13 +33,6 @@ public:
     TokenVal(Type t, size_t l, const std::string& val)
         : Token(t, l), value(val) {}
     bool hasValue() const override { return true; }
-    std::string typeToString() const override { 
-        switch(type) {
-            case Type::IDENTIFIER: return "IDENTIFIER";
-            case Type::NUMBER: return "NUMBER";
-            default: return "UNKNOWN";
-        }
-    }
     const std::string& getValue() const override {
         return value;
     }
@@ -49,34 +42,8 @@ class TokenNoVal : public Token {
 public:
     TokenNoVal(Type type, size_t l)
         : Token(type, l) {}
-
-    std::string typeToString() const override {
-        switch (type) {
-            case Type::WHILE: return "WHILE";
-            case Type::ASSIGN: return "ASSIGN";
-            case Type::DIVIDE: return "DIVIDE";
-            case Type::EQ: return "EQ";
-            case Type::IF: return "IF";
-            case Type::IN: return "IN";
-            case Type::LBRACKET: return "LBRACKET";
-            case Type::LESS: return "LESS";
-            case Type::LESSEQ: return "LESSEQ";
-            case Type::LPAREN: return "LPAREN";
-            case Type::MINUS: return "MINUS";
-            case Type::MORE: return "MORE";
-            case Type::MOREEQ: return "MOREEQ";
-            case Type::MULTIPLY: return "MULTIPLY";
-            case Type::NEQ: return "NEQ";
-            case Type::PLUS: return "PLUS";
-            case Type::PRINT: return "PRINT";
-            case Type::RBRACKET: return "RBRACKET";
-            case Type::RPAREN: return "RPAREN";
-            case Type::SEMI: return "SEMI";
-            default: return "UNKNOWN";
-        }
-    }
 };
 
-using TokenVectorConstIterator = std::vector<std::unique_ptr<Token>>::const_iterator;
+using TokenIter = std::vector<std::unique_ptr<Token>>::const_iterator;
 using TokenVector = std::vector<std::unique_ptr<Token>>;
 using FactoryMethod = std::function<std::unique_ptr<Token>()>;
