@@ -1,95 +1,55 @@
-#include "types.hpp"
+#pragma once
 #include "exceptions.hpp"
-class ASTNode;
-using node_ptr = std::unique_ptr<ASTNode>;
-class ASTNode {
-    Type type;
-public:
-    ASTNode(Type t) : type(t) {}
-    virtual ~ASTNode() = default;
-    Type getType() {
-        return type;
-    }
-    virtual const std::string& getValue() const {
-        throw std::runtime_error("Token has no value");
-    }
-    virtual bool hasValue() const {
-        return false;
-    }
-};
-
-class SimpleNode : public ASTNode {
-    std::string value;
-public:
-    SimpleNode(Type t, std::string val) : ASTNode(t), value(val) {}
-    const std::string& getValue() const override {
-        return value;
-    }
-    bool hasValue() const override {
-        return true;
-    }
-};
-
-class BinaryNode : public ASTNode {
-    node_ptr left, right;
-public:
-    BinaryNode(Type t, node_ptr l, node_ptr r) : ASTNode(t), 
-    left(std::move(l)), right(std::move(r)) {}
-    const node_ptr& getLeft() const {
-        return left;
-    }
-    const node_ptr& getRight() const {
-        return right;
-    }
-};
-
-class InOutStmt : public ASTNode {
-    node_ptr expr;
-public:
-    InOutStmt(Type t, node_ptr e) : ASTNode(t), expr(std::move(e)) {}
-    const node_ptr& getExpr() const {
-        return expr;
-    }
-};
-
-class ConditionStmt : public ASTNode {
-    node_ptr condition;
-    std::vector<node_ptr> body;
-public:
-    ConditionStmt(Type t, node_ptr c, std::vector<node_ptr> b) : ASTNode(t), 
-    condition(std::move(c)), body(std::move(b)) {}
-    const std::vector<node_ptr>& getBody() const {
-        return body;
-    }
-    const node_ptr& getCondition() const {
-        return condition;
-    }
-};
-
-class Block : public ASTNode {
-    std::vector<node_ptr> body;
-public:
-    Block(std::vector<node_ptr> b) : ASTNode(Type::BLOCK),  body(std::move(b)) {}
-    const std::vector<node_ptr>& getBody() const {
-        return body;
-    }
-};
+#include "ast.hpp"
 
 class Parser {
-    TokenVectorConstIterator current;
-    TokenVectorConstIterator end;
+    TokenIter current;
+    TokenIter end;
 
-    Type look() const {
-    if (current == end) {
-        return Type::EOFTOKEN;
+    Type type() const {
+        if (current == end) {
+            return Type::EOFTOKEN;
+        }
+        return (*current)->getType();
     }
-    return (*current)->getType();
-}
 
-    std::string lookUp() const {
+    std::string value() const {
         std::string empty = "";
         if (current == end) return empty;
-        return (*current)->getValue();
+        if ((*current)->hasValue()) return (*current)->getValue();
+        else return empty;
+    }
+
+    std::string typeToString(Type type) const {
+        switch (type) {
+            case Type::WHILE: return "while";
+            case Type::ASSIGN: return "=";
+            case Type::DIVIDE: return "/";
+            case Type::EQ: return "==";
+            case Type::IF: return "IF";
+            case Type::IN: return "IN";
+            case Type::LBRACKET: return "{";
+            case Type::LESS: return "<";
+            case Type::LESSEQ: return "<=";
+            case Type::LPAREN: return "(";
+            case Type::MINUS: return "-";
+            case Type::MORE: return ">";
+            case Type::MOREEQ: return ">=";
+            case Type::MULTIPLY: return "*";
+            case Type::NEQ: return "!=";
+            case Type::PLUS: return "+";
+            case Type::PRINT: return "print";
+            case Type::RBRACKET: return "}";
+            case Type::RPAREN: return ")";
+            case Type::SEMI: return ";";
+            case Type::IDENTIFIER: return "IDENTIFIER";
+            case Type::NUMBER: return "NUMBER";
+            default: return "UNKNOWN";
+        }
+    }
+
+    std::string typeStr() const {
+        return typeToString(type());
     }
 
     std::string getLine() const {
@@ -100,15 +60,24 @@ class Parser {
         if (current != end) ++current;
     }
 
-    bool match(Type type) {
-        if (look()==type) {
+    bool match(Type t) {
+        if (type()==t) {
             next();
             return true;
         }
         else return false;
     }
+
+    template<typename T, typename... Args>
+    node_ptr construct(Args&&... args) {
+        return std::make_unique<Node>(std::in_place_type<T>, std::forward<Args>(args)...);
+    }
+
+    void expected(Type t) {
+        if (!match(t)) throw СompilerError("Expected" + typeToString(t) + " on line " + getLine());
+    }
 public:
-    node_ptr parse(TokenVectorConstIterator beg, TokenVectorConstIterator e) {
+    node_ptr parse(TokenIter beg, TokenIter e) {
         current = beg;
         end = e;
         return program();
@@ -116,114 +85,133 @@ public:
 private:
     node_ptr program() {
         auto list = statementList();
-        return std::make_unique<Block>(std::move(list));
+        return list;
     }
 
-    std::vector<node_ptr> statementList() {
+    node_ptr statementList() {
         std::vector<node_ptr> stmtList;
 
-        while (look()!=Type::EOFTOKEN && look()!=Type::RBRACKET) {
+        while (type()!=Type::EOFTOKEN && type()!=Type::RBRACKET) {
             node_ptr node = statement();
             if (node) {
                 stmtList.push_back(std::move(node));
             }
         }
         if (stmtList.empty()) throw СompilerError("Empty program");
-        return stmtList;
+        return construct<Block>(std::move(stmtList));
     }
 
-    std::vector<node_ptr> block() {
-        if (!match(Type::LBRACKET)) throw СompilerError("Expected '{' on line " + getLine());
+    node_ptr block() {
+        expected(Type::LBRACKET);
         auto node = statementList();
-        if (!match(Type::RBRACKET)) throw СompilerError("Expected '}' on line " + getLine());
+        expected(Type::RBRACKET);
         return node;
     }
 
     node_ptr statement() {
-        auto op = look();
-        if (op==Type::WHILE || op==Type::IF) {
+        auto op = type();
+        if (op==Type::WHILE) {
             next();
-            if (!match(Type::LPAREN)) throw СompilerError("Expected '(' on line " + getLine());
+            expected(Type::LPAREN);
             auto cond = simpleExpr();
-            if (!match(Type::RPAREN)) throw СompilerError("Expected ')' on line " + getLine());
+            expected(Type::RPAREN);
             auto body = block();
-            return std::make_unique<ConditionStmt>(op, std::move(cond), std::move(body));
+            return construct<WhileNode>(std::move(cond), std::move(body));
         }
-        if (op==Type::PRINT || op==Type::IN) {
+        if (op==Type::IF) {
             next();
-            if (!match(Type::LPAREN)) throw СompilerError("Expected '(' on line " + getLine());
+            expected(Type::LPAREN);
+            auto cond = simpleExpr();
+            expected(Type::RPAREN);
+            auto body = block();
+            return construct<IfNode>(std::move(cond), std::move(body));
+        }
+        if (op==Type::PRINT) {
+            next();
+            expected(Type::LPAREN);
             auto expr = simpleExpr();
-            if (!match(Type::RPAREN)) throw СompilerError("Expected ')' on line " + getLine());
-            if (!match(Type::SEMI)) throw СompilerError("Expected ';' on line " + getLine());
-            return std::make_unique<InOutStmt>(op, std::move(expr));
+            expected(Type::RPAREN);
+            expected(Type::SEMI);
+            return construct<PrintNode>(std::move(expr));
+        }
+        if (op==Type::IN) {
+            next();
+            expected(Type::LPAREN);
+            expected(Type::IDENTIFIER);
+            auto expr = factor();
+            expected(Type::RPAREN);
+            expected(Type::SEMI);
+            return construct<InNode>(std::move(expr));
         }
         return assignment();
     }
 
     node_ptr assignment() {
         node_ptr left = factor();
-        if (left->getType()==Type::IDENTIFIER && look()==Type::ASSIGN) {
-            next();
-            auto right = simpleExpr();
-            if (!match(Type::SEMI)) throw СompilerError("Expected ';' on line " + getLine());
-            return std::make_unique<BinaryNode>(Type::ASSIGN, std::move(left), std::move(right));
+        if (type()==Type::ASSIGN) {
+            if (std::holds_alternative<IdntyNode>(*left)) {
+                next();
+                auto right = simpleExpr();
+                expected(Type::SEMI);
+                return construct<BinaryNode>(std::move(left), std::move(right), "=");
+            }
+            else throw СompilerError("Expected IDENTIFIER before '=' on line" + getLine());
         }
         return left;
     }
 
     node_ptr simpleExpr() {
         node_ptr left = expression();
-        auto op = look();
-        if (op==Type::EQ || op==Type::NEQ || op==Type::LESS || op==Type::MORE || op==Type::LESSEQ || op==Type::MOREEQ) {
+        auto op = typeStr();
+        if (op=="<" || op==">" || op=="<=" || op==">=" || op=="==" || op=="!=") {
             next();
             auto right = expression();
-            return std::make_unique<BinaryNode>(op, std::move(left), std::move(right));
+            return construct<BinaryNode>(std::move(left), std::move(right), op);
         }
         return left;
     }
 
     node_ptr expression() {
         node_ptr left = term();
-        auto op = look();
-        while (op==Type::PLUS || op==Type::MINUS) {
+        std::string op = typeStr();
+        while (type()==Type::PLUS || type()==Type::MINUS) {
             next();
             auto right = term();
-            left = std::make_unique<BinaryNode>(op, std::move(left), std::move(right));
-            op = look();
+            left = construct<BinaryNode>(std::move(left), std::move(right), op);
+            op = typeStr();
         }
         return left;
     }
 
     node_ptr term() {
         node_ptr left = factor();
-        auto op = look();
-        while (op==Type::MULTIPLY || op==Type::DIVIDE) {
+        auto op = typeStr();
+        while (type()==Type::MULTIPLY || type()==Type::DIVIDE) {
             next();
             auto right = factor();
-            left = std::make_unique<BinaryNode>(op, std::move(left), std::move(right));
-            op = look();
+            left = construct<BinaryNode>(std::move(left), std::move(right), op);
+            op = typeStr();
         }
         return left;
     }
 
     node_ptr factor() {
-        node_ptr node;
-        if (look()==Type::IDENTIFIER) {
-            node = std::make_unique<SimpleNode>(Type::IDENTIFIER, lookUp());
+        if (type()==Type::IDENTIFIER) {
+            node_ptr node = construct<IdntyNode>(value());
+            next();
+            if (type()==Type::SEMI) throw СompilerError("Unitianilized variable " + value() + " on line " + getLine());
+            return node;
+        }
+        if (type()==Type::NUMBER) {
+            node_ptr node = construct<NumberNode>(std::stod(value()));
             next();
             return node;
         }
-        if (look()==Type::NUMBER) {
-            node = std::make_unique<SimpleNode>(Type::NUMBER, lookUp());
+        if (type()==Type::LPAREN) {
             next();
-            return node;
-        }
-        if (look()==Type::LPAREN) {
-            next();
-            node = expression();
+            node_ptr node = expression();
             if (!match(Type::RPAREN)) throw СompilerError("Expected ')' on line " + getLine());
         }
-        return node;
+        throw СompilerError("Unexpected symbol on line" + getLine());
     }
-
 };

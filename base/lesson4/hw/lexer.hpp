@@ -64,11 +64,11 @@ public:
     }
 
 
-    TokenVectorConstIterator begin() const {
+    TokenIter begin() const {
         return tokens.cbegin();
     }
 
-    TokenVectorConstIterator end() const {
+    TokenIter end() const {
         return tokens.cend();
     }
 
