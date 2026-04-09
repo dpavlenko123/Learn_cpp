@@ -1,0 +1,5 @@
+entry:
+    PUSH 42
+    PUSH 0x100
+    STORE
+    HALT

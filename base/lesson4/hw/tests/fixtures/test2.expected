@@ -1,0 +1,17 @@
+entry:
+    PUSH 1
+    PUSH 2
+    EQ
+    JE bb0 bb1
+bb0:
+    PUSH 1
+    PUSH 0x100
+    STORE
+    JMP bb2
+bb1:
+    PUSH 2
+    PUSH 0x100
+    STORE
+    JMP bb2
+bb2:
+    HALT

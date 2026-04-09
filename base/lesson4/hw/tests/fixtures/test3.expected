@@ -1,0 +1,25 @@
+entry:
+    PUSH 5
+    PUSH 0x100
+    STORE
+    PUSH 10
+    PUSH 0x104
+    STORE
+    PUSH 0x100
+    LOAD
+    PUSH 0x104
+    LOAD
+    LT
+    JE bb0 bb1
+bb0:
+    PUSH 1
+    PUSH 0x108
+    STORE
+    JMP bb2
+bb1:
+    PUSH 0
+    PUSH 0x108
+    STORE
+    JMP bb2
+bb2:
+    HALT
