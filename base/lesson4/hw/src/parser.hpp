@@ -204,7 +204,6 @@ private:
         if (type()==Type::IDENTIFIER) {
             node_ptr node = construct<IdntyNode>(value());
             next();
-            if (type()==Type::SEMI) throw CompilerError("Unitianilized variable " + value() + " on line " + getLine());
             return node;
         }
         if (type()==Type::NUMBER) {

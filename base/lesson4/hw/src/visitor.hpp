@@ -253,24 +253,18 @@ class StackVisitor : public ASTVisitor {
         return it->second;
     }
     std::string toHex(size_t value) {
-        std::stringstream ss;
-        ss << "0x" << std::hex << value;
-        return ss.str();
+        return std::to_string(value); 
     }
 public:
     std::string getCode() const { return text.str(); }
 
     void operator()(const NumberNode& node) override {
-        double val = node.getValue();
-        if (val == std::floor(val)) {
-            generate("    PUSH " + std::to_string(static_cast<int>(val)));
-        } else {
-            generate("    PUSH " + std::to_string(val));
-        }
+        int val = node.getValue();
+        generate("\tPUSH " + std::to_string(val));
     }
     void operator()(const IdntyNode& node) override {
         size_t address = getVarAddress(node.getValue());
-        generate("    PUSH " + toHex((address)));
+        generate("\tPUSH " + toHex((address)));
     }
     void operator()(const BinaryNode& node) override {
         const std::string& op = node.getOperation();
@@ -285,58 +279,61 @@ public:
             std::visit(*this, *node.getRight());
             std::visit(*this, *node.getLeft());
             
-            generate("    STORE");
+            generate("\tSTORE");
         }
         else {
             std::visit(*this, *node.getLeft());
             if (std::get_if<IdntyNode>(node.getLeft().get())) {
-                generate("    LOAD");
+                generate("\tLOAD");
             }
 
             std::visit(*this, *node.getRight());
             if (std::get_if<IdntyNode>(node.getRight().get())) {
-                generate("    LOAD");
+                generate("\tLOAD");
             }
             
-            if (op == "<") generate("    LT");
-            else if (op == ">") generate("    GT");
-            else if (op == ">=") generate("    GE");
-            else if (op == "<=") generate("    LE");
-            else if (op == "==") generate("    EQ");
-            else if (op == "!=") generate("    NE");
-            else if (op == "+") generate("    ADD");
-            else if (op == "-") generate("    SUB");
-            else if (op == "/") generate("    DIV");
-            else if (op == "*") generate("    MUL");
+            if (op == "<") generate("\tLT");
+            else if (op == ">") generate("\tGT");
+            else if (op == ">=") generate("\tGE");
+            else if (op == "<=") generate("\tLE");
+            else if (op == "==") generate("\tEQ");
+            else if (op == "!=") generate("\tNE");
+            else if (op == "+") generate("\tADD");
+            else if (op == "-") generate("\tSUB");
+            else if (op == "/") generate("\tDIV");
+            else if (op == "*") generate("\tMUL");
             else {
                 throw std::runtime_error("Unknown operator: " + op);
             }
         }
     }
     void operator()(const InNode& node) override {
-        generate("    IN");
+        generate("\tIN");
         auto* expr = std::get_if<IdntyNode>(node.getExpr().get());
         if (!expr) throw CompilerError("Expression of IN must be variable");
         allocateVar(expr->getValue());
         std::visit(*this, *node.getExpr());
-        generate("    STORE");
+        generate("\tSTORE");
     }
     void operator()(const PrintNode& node) override {
         std::visit(*this, *node.getExpr());
-        generate("    OUT");
+        if (std::get_if<IdntyNode>(node.getExpr().get())) {
+                generate("\tLOAD");
+            }
+        generate("\tOUT");
     }
     void operator()(const WhileNode& node) override {
         std::string condition = newBb();
         std::string body = newBb();
         std::string end = newBb();
-        generate("    JMP " + condition);
+        generate("\tJMP " + condition);
         generate(condition + ":");
         std::visit(*this, *node.getCondition());
-        generate("    JE " + body + " " + end);
+        generate("\tJE " + body + " " + end);
         generate(body + ":");
         std::visit(*this, *node.getBody());
         
-        generate("    JMP " + condition);
+        generate("\tJMP " + condition);
         generate(end + ":");
     }
     void operator()(const IfNode& node) override {
@@ -346,20 +343,20 @@ public:
         if (node.getElseBody()) {
             std::string elseBody = newBb();
             end = newBb();
-            generate("    JE " + ifBody + " " + elseBody);
+            generate("\tJE " + ifBody + " " + elseBody);
             generate(ifBody + ":");
             std::visit(*this, *node.getIfBody());
-            generate("    JMP " + end);
+            generate("\tJMP " + end);
             generate(elseBody + ":");
             std::visit(*this, *node.getElseBody());
-            generate("    JMP " + end);
+            generate("\tJMP " + end);
         }
         else {
             end = newBb();
-            generate("    JE " + ifBody + " " + end);
+            generate("\tJE " + ifBody + " " + end);
             generate(ifBody + ":");
             std::visit(*this, *node.getIfBody());
-            generate("    JMP " + end);
+            generate("\tJMP " + end);
         }
         generate(end + ":");
     }

@@ -32,9 +32,11 @@ Program → StatementList
 
 StatementList → Statement | StatementList | ε
 
-Statement → Assignment ";"
+Statement → Assignment ";" | while (simple expression) statement list | if (simple expression) statement list | print (simple expression) | in (identifier)
 
-Assignment → IDENTIFIER "=" Expression
+Assignment → IDENTIFIER "=" Expression 
+
+Simple expression -> Expression | Expression "<=>" Expression
 
 Expression → Expression "+" Term | Expression "-" Term | Term 
 

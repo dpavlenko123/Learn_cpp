@@ -19,10 +19,10 @@ public:
 };
 
 class NumberNode {
-    double value;
+    int value;
 public:
     NumberNode(double val) : value(val) {}
-    double getValue() const { return value; }
+    int getValue() const { return value; }
     void accept(ASTVisitor* v);
 };
 

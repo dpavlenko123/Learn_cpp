@@ -4,6 +4,7 @@
 #include <iostream>
 #include <sstream>
 #include "lexer.hpp"
+#include "stack_machine.cpp"
 
 int main(int argc, char* argv[]) {
     if (argc != 3) {
@@ -20,18 +21,22 @@ int main(int argc, char* argv[]) {
     std::stringstream buffer;
     buffer << input_file.rdbuf();
     std::string source_code = buffer.str();
-    std::unique_ptr<Lexer> lexer = std::make_unique<Lexer>(source_code);
-    lexer->tokenize();
-    std::unique_ptr<Parser> parser = std::make_unique<Parser>();
-    auto begin = lexer->begin();
-    auto end = lexer->end();
-    node_ptr ast = parser->parse(begin, end);
+    Lexer lexer = Lexer(source_code);
+    lexer.tokenize();
+    Parser parser = Parser();
+    auto begin = lexer.begin();
+    auto end = lexer.end();
+    node_ptr ast = parser.parse(begin, end);
     
     StackVisitor visitor;
     std::visit(visitor, *ast);
+    std::stringstream operations;
+    operations << "entry:" << std::endl;
+    operations << visitor.getCode();
+    operations << "\tHALT";
     std::ofstream output_file(argv[2]);
-    output_file << "entry:" << std::endl;
-    output_file << visitor.getCode();
-    output_file << "    HALT";
+    StackMachine sm(output_file);
+    sm.load(operations.str());
+    sm.run();
     return 0;
 }
