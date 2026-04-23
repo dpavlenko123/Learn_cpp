@@ -26,10 +26,16 @@ protected:
 };
 
 TEST_F(ParserTest, SimpleEvaluation) {
-    parse("x = 2 + 3;");
+    parse(R"(a = 4;
+            s = 1;
+            while (a!=0) {
+                s = s*a;
+                a = a-1;
+            }
+            print(s);)");
     EvalVisitor visitor;
     std::visit(visitor, *ast);
-    EXPECT_EQ(5, visitor.get_value());
+    EXPECT_EQ(24, visitor.get_value());
 }
 
 // TEST_F(ParserTest, CompareTrees) {
@@ -535,7 +541,7 @@ TEST_F(ParserTest, CompareTrees) {
 //     EXPECT_TRUE(isSimpleNode(division->getRight().get(), Type::NUMBER, "5"));
 // }
 
-// int main(int argc, char **argv) {
-//     ::testing::InitGoogleTest(&argc, argv);
-//     return RUN_ALL_TESTS();
-// }
+int main(int argc, char **argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}

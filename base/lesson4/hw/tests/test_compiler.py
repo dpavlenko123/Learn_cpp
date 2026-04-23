@@ -7,8 +7,8 @@ from pathlib import Path
 TEST_DIR = Path(__file__).parent / "fixtures"
 
 def test_all():
-    for spl_file in TEST_DIR.glob("*.spl"):
-        expected_file = spl_file.with_suffix(".expected")
+    for spl_file in TEST_DIR.glob("*.sm"):
+        expected_file = spl_file.with_suffix(".sm.exp")
         if not expected_file.exists():
             continue
         

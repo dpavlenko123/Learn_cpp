@@ -1,6 +1,7 @@
 #pragma once
 #include <iostream>
 #include <string>
+#include <functional>
 enum class Type {
     NUMBER, IDENTIFIER,
     WHILE, IF, IN, PRINT, ASSIGN, ELSE,
